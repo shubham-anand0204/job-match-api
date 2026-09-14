@@ -1,12 +1,12 @@
 import { createApp } from './app.js';
-import { createInMemoryRepositories } from './repositories/memory.js';
+import { createRepositories } from './repositories/index.js';
 
 const port = Number(process.env.PORT ?? 3000);
-const repos = createInMemoryRepositories();
+const { repos, driver } = createRepositories();
 const app = createApp(repos);
 
 const server = app.listen(port, () => {
-  console.log(`Job Match API listening on http://localhost:${port} (storage: in-memory)`);
+  console.log(`Job Match API listening on http://localhost:${port} (storage: ${driver})`);
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
