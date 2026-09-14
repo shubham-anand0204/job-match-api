@@ -10,7 +10,8 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "typecheck": "tsc -p tsconfig.check.json"
   },
   "license": "MIT",
   "dependencies": {
