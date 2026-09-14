@@ -471,8 +471,6 @@ demand factor (see below) rather than by changing the definition.
   filter is the natural thing to push into Postgres as a `jsonb` containment query with a
   GIN index, scoring only what survives.
 - **Pagination** with cursors, rather than only `limit`.
-- **A shared weights query-param parser** between the two recommendation routers — they
-  currently repeat a small amount of structure.
 - **Database migrations** via a proper tool rather than a single `init.sql` applied on
   first boot.
 - **Structured logging and request IDs**, plus rate limiting and CORS for a real deployment.
@@ -528,6 +526,9 @@ where, because "I used AI" on its own is not a useful disclosure.
   Split into a separate `tsconfig.check.json`.
 - The Postgres container refused to read its mounted init script under SELinux on Fedora.
   Fixed with the `:z` relabel flag.
+- Both recommendation endpoints ranked the entire pool **twice** per request — once with
+  the limit applied for the response, and again without it just to compute
+  `totalEligible`. Every job was scored two times. Reworked to score once and slice.
 
 **What I verified rather than assumed**
 

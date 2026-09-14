@@ -1,84 +1,112 @@
-import { Router } from 'express';
-import { recommendationQuerySchema, type RecommendationQuery } from '../domain/schemas.js';
+import { Router, type RequestHandler } from 'express';
+import { recommendationQuerySchema } from '../domain/schemas.js';
 import { HttpError, notFound } from '../errors.js';
 import type { Repositories } from '../repositories/repository.js';
 import { recommendCandidates, recommendJobs } from '../scoring/recommend.js';
 import { normaliseWeights, type Weights } from '../scoring/weights.js';
+import type { MatchBreakdown } from '../scoring/scorer.js';
 
-function weightsFromQuery(q: RecommendationQuery): Partial<Weights> {
-  const weights = { skills: q.wSkills, experience: q.wExperience, location: q.wLocation, salary: q.wSalary };
+interface ParsedOptions {
+  limit?: number;
+  weights: Partial<Weights>;
+  normalisedWeights: Weights;
+}
+
+/**
+ * Parses limit and weight overrides from the query string. Weights are validated
+ * here so an unusable combination (e.g. all zero) is a 400 from the edge rather
+ * than a division by zero deep inside the scorer.
+ */
+function parseOptions(query: unknown): ParsedOptions {
+  const q = recommendationQuerySchema.parse(query);
+  const weights: Partial<Weights> = {
+    skills: q.wSkills,
+    experience: q.wExperience,
+    location: q.wLocation,
+    salary: q.wSalary,
+  };
   try {
-    normaliseWeights(weights); // validate early so a bad combination (e.g. all zero) is a 400, not a 500
+    return { limit: q.limit, weights, normalisedWeights: normaliseWeights(weights) };
   } catch (err) {
     throw new HttpError(400, (err as Error).message);
   }
-  return weights;
 }
 
-/** GET /candidates/:id/recommendations — ranked jobs for a candidate. */
-export function candidateRecommendationsRouter(repos: Repositories): Router {
-  const router = Router({ mergeParams: true });
+interface ScoredEntry {
+  score: number;
+  breakdown: MatchBreakdown;
+}
 
-  router.get('/:id/recommendations', async (req, res, next) => {
+/**
+ * Shared response shape for both directions. The full ranked list is scored once
+ * and sliced here, so `totalEligible` costs nothing extra.
+ */
+function buildResponse<T extends ScoredEntry>(
+  subject: Record<string, string>,
+  ranked: T[],
+  options: ParsedOptions,
+  toItem: (entry: T) => Record<string, unknown>,
+): Record<string, unknown> {
+  const limited = options.limit !== undefined ? ranked.slice(0, options.limit) : ranked;
+  return {
+    ...subject,
+    weights: options.normalisedWeights,
+    totalEligible: ranked.length,
+    count: limited.length,
+    recommendations: limited.map((entry) => ({
+      ...toItem(entry),
+      score: entry.score,
+      breakdown: entry.breakdown,
+    })),
+  };
+}
+
+/** GET /candidates/:id/recommendations — ranked jobs for one candidate. */
+export function candidateRecommendationsRouter(repos: Repositories): Router {
+  const handler: RequestHandler = async (req, res, next) => {
     try {
-      const query = recommendationQuerySchema.parse(req.query);
+      const options = parseOptions(req.query);
       const candidate = await repos.candidates.findById(req.params.id);
       if (!candidate) throw notFound('Candidate', req.params.id);
 
-      const weights = weightsFromQuery(query);
       const jobs = await repos.jobs.findAll();
-      const recommendations = recommendJobs(candidate, jobs, { limit: query.limit, weights });
+      const ranked = recommendJobs(candidate, jobs, { weights: options.weights });
 
-      res.json({
-        candidateId: candidate.id,
-        weights: normaliseWeights(weights),
-        totalEligible: recommendJobs(candidate, jobs, { weights }).length,
-        count: recommendations.length,
-        recommendations: recommendations.map((r) => ({
+      res.json(
+        buildResponse({ candidateId: candidate.id }, ranked, options, (r) => ({
           jobId: r.job.id,
           title: r.job.title,
-          score: r.score,
-          breakdown: r.breakdown,
         })),
-      });
+      );
     } catch (err) {
       next(err);
     }
-  });
+  };
 
-  return router;
+  return Router().get('/:id/recommendations', handler);
 }
 
-/** GET /jobs/:id/recommendations — reverse view: best-fit candidates for a job. */
+/** GET /jobs/:id/recommendations — reverse view: best-fit candidates for one job. */
 export function jobRecommendationsRouter(repos: Repositories): Router {
-  const router = Router({ mergeParams: true });
-
-  router.get('/:id/recommendations', async (req, res, next) => {
+  const handler: RequestHandler = async (req, res, next) => {
     try {
-      const query = recommendationQuerySchema.parse(req.query);
+      const options = parseOptions(req.query);
       const job = await repos.jobs.findById(req.params.id);
       if (!job) throw notFound('Job', req.params.id);
 
-      const weights = weightsFromQuery(query);
       const candidates = await repos.candidates.findAll();
-      const recommendations = recommendCandidates(job, candidates, { limit: query.limit, weights });
+      const ranked = recommendCandidates(job, candidates, { weights: options.weights });
 
-      res.json({
-        jobId: job.id,
-        weights: normaliseWeights(weights),
-        totalEligible: recommendCandidates(job, candidates, { weights }).length,
-        count: recommendations.length,
-        recommendations: recommendations.map((r) => ({
+      res.json(
+        buildResponse({ jobId: job.id }, ranked, options, (r) => ({
           candidateId: r.candidate.id,
           name: r.candidate.name,
-          score: r.score,
-          breakdown: r.breakdown,
         })),
-      });
+      );
     } catch (err) {
       next(err);
     }
-  });
+  };
 
-  return router;
+  return Router().get('/:id/recommendations', handler);
 }
