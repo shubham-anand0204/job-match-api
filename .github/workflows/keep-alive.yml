@@ -1,0 +1,45 @@
+# Keeps the free Render instance awake.
+#
+# Render sleeps a free web service after 15 minutes without traffic, and waking
+# it takes about a minute. A reviewer clicking the demo link should not wait
+# that long, so this pings /health every 10 minutes.
+#
+# Set the repository variable DEMO_URL to the deployed base URL
+# (Settings → Secrets and variables → Actions → Variables). Without it the job
+# exits quietly rather than failing, so the workflow is harmless before deploy.
+#
+# Note: GitHub's scheduler is best-effort and can run late under load. If the
+# demo must never be cold, an external monitor such as UptimeRobot polls on a
+# stricter interval.
+name: Keep demo awake
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping the health endpoint
+        env:
+          DEMO_URL: ${{ vars.DEMO_URL }}
+        run: |
+          if [ -z "$DEMO_URL" ]; then
+            echo "DEMO_URL is not set; nothing to ping. Skipping."
+            exit 0
+          fi
+          # --max-time 120 tolerates a cold start; retries cover a wake in progress.
+          curl --fail --silent --show-error \
+               --max-time 120 --retry 3 --retry-delay 20 --retry-all-errors \
+               "${DEMO_URL%/}/health"
+          echo "  <- $DEMO_URL is awake"

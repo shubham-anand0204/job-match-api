@@ -1,0 +1,36 @@
+# Render Blueprint — infrastructure as code for the live demo.
+#
+# To deploy: Render dashboard → New → Blueprint → pick this repo. Render reads
+# this file, provisions both resources and wires DATABASE_URL between them.
+#
+# The API applies its own schema at startup (see src/repositories/schema.ts),
+# so there is no manual migration step after the database is created.
+#
+# Free-plan caveats, stated plainly:
+#   - the web service sleeps after 15 minutes idle and takes ~1 minute to wake
+#     (see .github/workflows/keep-alive.yml for the ping that prevents this)
+#   - a free Postgres instance expires 30 days after creation
+services:
+  - type: web
+    name: job-match-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: job-match-db
+          property: connectionString
+      - key: PORT
+        value: 3000
+      - key: NODE_ENV
+        value: production
+
+databases:
+  - name: job-match-db
+    plan: free
+    databaseName: jobmatch
+    user: jobmatch
