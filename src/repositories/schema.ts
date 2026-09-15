@@ -1,4 +1,16 @@
--- Schema for the Job Match API.
+/**
+ * The database schema, as the single source of truth.
+ *
+ * It lives here rather than in a .sql file on disk because the API applies it
+ * itself at startup (see `ensureSchema`). That means the app works against any
+ * empty Postgres — local, Docker, or a managed instance on a host that has no
+ * way to run an init script — with no manual setup step.
+ *
+ * Every statement is idempotent, so running it on an existing database is a
+ * no-op. This is deliberately a bootstrap, not a migration tool: see the README
+ * for why a real project would graduate to one.
+ */
+export const SCHEMA_SQL = `
 -- Skills are stored inline (text[] / jsonb) rather than in join tables: the
 -- scorer always loads the whole skill list for a row, never queries across
 -- skills, so normalising them would add joins without buying anything.
@@ -28,3 +40,4 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 CREATE INDEX IF NOT EXISTS jobs_location_idx       ON jobs (lower(location));
 CREATE INDEX IF NOT EXISTS candidates_location_idx ON candidates (lower(location));
+`;

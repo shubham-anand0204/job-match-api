@@ -24,5 +24,5 @@ class InMemoryStore<T extends { id: string }, TNew> {
 export function createInMemoryRepositories(): Repositories {
   const candidates: CandidateRepository = new InMemoryStore<Candidate, NewCandidate>();
   const jobs: JobRepository = new InMemoryStore<Job, NewJob>();
-  return { candidates, jobs, close: async () => {} };
+  return { candidates, jobs, init: async () => {}, close: async () => {} };
 }

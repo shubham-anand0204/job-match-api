@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import type { Candidate, Job, NewCandidate, NewJob, RequiredSkill } from '../domain/types.js';
 import type { CandidateRepository, JobRepository, Repositories } from './repository.js';
+import { SCHEMA_SQL } from './schema.js';
 
 interface CandidateRow {
   id: string;
@@ -104,7 +105,17 @@ export function createPostgresRepositories(connectionString: string): Repositori
     },
   };
 
-  return { candidates, jobs, close: () => pool.end() };
+  /**
+   * Applies the schema. Every statement is idempotent, so this is safe to run on
+   * every boot and against an already-populated database. It means the API can
+   * be pointed at any empty Postgres — including a managed instance with no way
+   * to run an init script — and come up working.
+   */
+  const init = async (): Promise<void> => {
+    await pool.query(SCHEMA_SQL);
+  };
+
+  return { candidates, jobs, init, close: () => pool.end() };
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

@@ -5,6 +5,8 @@ const port = Number(process.env.PORT ?? 3000);
 const { repos, driver } = createRepositories();
 const app = createApp(repos);
 
+await repos.init();
+
 const server = app.listen(port, () => {
   console.log(`Job Match API listening on http://localhost:${port} (storage: ${driver})`);
 });

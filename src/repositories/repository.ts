@@ -15,6 +15,12 @@ export interface JobRepository {
 export interface Repositories {
   candidates: CandidateRepository;
   jobs: JobRepository;
+  /**
+   * Prepare the store before it serves traffic. For Postgres this applies the
+   * schema; for the in-memory store there is nothing to do. Callers must await
+   * it before listening.
+   */
+  init(): Promise<void>;
   /** Release any underlying connections. */
   close(): Promise<void>;
 }
