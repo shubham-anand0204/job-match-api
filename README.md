@@ -6,10 +6,30 @@ skill, experience, location and salary fit — and explains every number it prod
 No machine learning, no black box. Every score can be traced back to a rule you can
 read in one file: [`src/scoring/scorer.ts`](src/scoring/scorer.ts).
 
+## Try it without cloning anything
+
+**Live demo: [https://job-match-api-81jh.onrender.com/docs](https://job-match-api-81jh.onrender.com/docs)**
+
+The instance is already seeded, so the endpoints return real results. Open the docs page
+and press Execute on any endpoint, or click these:
+
+- [Ranked jobs for Asha Rao](https://job-match-api-81jh.onrender.com/candidates/d7f2a57b-5004-454b-9640-92270bdef81f/recommendations?limit=3) — 5 years,
+  Bengaluru, TypeScript and Node
+- [Ranked jobs for Vikram Shah](https://job-match-api-81jh.onrender.com/candidates/2b54590f-c313-437b-888f-eb6d3c07b1d0/recommendations) — 1 year, Pune,
+  shows the experience penalty in the breakdown
+- [The OpenAPI document](https://job-match-api-81jh.onrender.com/openapi.json)
+
+Asha is eligible for three of the five seeded jobs. The Rust role is missing from her list
+no matter how you weight the query, because she does not have its must-have skill.
+
+> Hosted on a free instance, which sleeps after 15 minutes idle. If the first request hangs,
+> it is waking up and will take up to a minute. Every later request is fast.
+
 ---
 
 ## Contents
 
+- [Try it live](#try-it-without-cloning-anything)
 - [Quick start](#quick-start)
 - [Running with Docker](#running-with-docker)
 - [Deploying](#deploying)
@@ -90,8 +110,9 @@ Notes:
 
 ## Deploying
 
-The repo carries a [Render](https://render.com) blueprint at [`render.yaml`](render.yaml).
-In the Render dashboard choose **New → Blueprint** and pick this repo; it provisions the
+Deployed at **[https://job-match-api-81jh.onrender.com](https://job-match-api-81jh.onrender.com)** from the [Render](https://render.com) blueprint at
+[`render.yaml`](render.yaml). To stand up your own copy, choose **New → Blueprint** in the
+Render dashboard and pick this repo; it provisions the
 web service and a Postgres instance and wires `DATABASE_URL` between them. There is no
 migration step, because the API creates its own schema on first boot.
 
