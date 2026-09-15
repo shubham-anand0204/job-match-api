@@ -38,3 +38,77 @@ export const recommendationQuerySchema = z.object({
 export type CandidateInput = z.infer<typeof candidateSchema>;
 export type JobInput = z.infer<typeof jobSchema>;
 export type RecommendationQuery = z.infer<typeof recommendationQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// Response schemas.
+//
+// These describe what the API returns. They are not used to validate incoming
+// requests; they exist so the OpenAPI document is generated from the same
+// source of truth as the request schemas, and so tests can assert that a real
+// response still matches the published contract.
+// ---------------------------------------------------------------------------
+
+const uuid = z.string().uuid();
+
+export const candidateResponseSchema = candidateSchema.extend({ id: uuid });
+export const jobResponseSchema = jobSchema.extend({ id: uuid });
+
+export const dimensionScoreSchema = z.object({
+  score: z.number().describe('Points awarded for this dimension'),
+  max: z.number().describe('Maximum points available for this dimension'),
+  detail: z.string().describe('Human-readable explanation of how the points were derived'),
+});
+
+export const matchBreakdownSchema = z.object({
+  skills: dimensionScoreSchema,
+  experience: dimensionScoreSchema,
+  location: dimensionScoreSchema,
+  salary: dimensionScoreSchema,
+});
+
+export const weightsSchema = z.object({
+  skills: z.number(),
+  experience: z.number(),
+  location: z.number(),
+  salary: z.number(),
+});
+
+const recommendationEnvelope = {
+  weights: weightsSchema.describe('The weights actually applied, normalised to sum to 100'),
+  totalEligible: z.number().int().describe('Results that passed the must-have filter, before limit'),
+  count: z.number().int().describe('Results actually returned after limit'),
+};
+
+export const jobRecommendationsResponseSchema = z.object({
+  candidateId: uuid,
+  ...recommendationEnvelope,
+  recommendations: z.array(
+    z.object({
+      jobId: uuid,
+      title: z.string(),
+      score: z.number().min(0).max(100),
+      breakdown: matchBreakdownSchema,
+    }),
+  ),
+});
+
+export const candidateRecommendationsResponseSchema = z.object({
+  jobId: uuid,
+  ...recommendationEnvelope,
+  recommendations: z.array(
+    z.object({
+      candidateId: uuid,
+      name: z.string(),
+      score: z.number().min(0).max(100),
+      breakdown: matchBreakdownSchema,
+    }),
+  ),
+});
+
+export const errorResponseSchema = z.object({
+  error: z.string(),
+  details: z
+    .array(z.object({ path: z.string(), message: z.string() }))
+    .optional()
+    .describe('Present on validation failures, one entry per offending field'),
+});
