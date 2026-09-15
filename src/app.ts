@@ -2,6 +2,7 @@ import express, { type Express } from 'express';
 import { errorHandler } from './errors.js';
 import type { Repositories } from './repositories/repository.js';
 import { candidatesRouter } from './routes/candidates.js';
+import { docsRouter } from './routes/docs.js';
 import { jobsRouter } from './routes/jobs.js';
 import { candidateRecommendationsRouter, jobRecommendationsRouter } from './routes/recommendations.js';
 
@@ -10,6 +11,7 @@ export function createApp(repos: Repositories): Express {
   app.use(express.json());
 
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+  app.use(docsRouter());
   app.use('/candidates', candidateRecommendationsRouter(repos));
   app.use('/candidates', candidatesRouter(repos));
   app.use('/jobs', jobRecommendationsRouter(repos));
