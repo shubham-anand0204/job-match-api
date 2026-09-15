@@ -12,6 +12,7 @@ read in one file: [`src/scoring/scorer.ts`](src/scoring/scorer.ts).
 
 - [Quick start](#quick-start)
 - [Running with Docker](#running-with-docker)
+- [Deploying](#deploying)
 - [API reference](#api-reference)
 - [The API contract (OpenAPI)](#the-api-contract-openapi)
 - [**The scoring formula and why these weights**](#the-scoring-formula-and-why-these-weights) ← the important part
@@ -80,11 +81,34 @@ docker compose down -v
 ```
 
 Notes:
-- The schema in [`db/init.sql`](db/init.sql) is applied on first start of an empty volume.
-- The bind mount uses the `:z` flag so it works on SELinux hosts such as Fedora and RHEL.
-  The flag is ignored everywhere else.
+- The API applies its own schema at startup, so there is no migration step and no init
+  script to mount. Point it at any empty Postgres and it comes up working.
 - The image is a multi-stage build: TypeScript is compiled with dev dependencies, and the
   runtime stage installs production dependencies only and runs as the non-root `node` user.
+
+---
+
+## Deploying
+
+The repo carries a [Render](https://render.com) blueprint at [`render.yaml`](render.yaml).
+In the Render dashboard choose **New → Blueprint** and pick this repo; it provisions the
+web service and a Postgres instance and wires `DATABASE_URL` between them. There is no
+migration step, because the API creates its own schema on first boot.
+
+Render was chosen over Vercel deliberately. This is a long-lived Express server, and on
+serverless the default in-memory store would scatter across instances, so a write and the
+read that follows it could land in different places. Render runs the same Dockerfile used
+locally, as one persistent process.
+
+Two free-plan facts worth stating plainly rather than discovering later:
+
+- **The service sleeps after 15 minutes idle** and takes about a minute to wake.
+  [`.github/workflows/keep-alive.yml`](.github/workflows/keep-alive.yml) pings `/health`
+  every 10 minutes to prevent that. Set the repository variable `DEMO_URL` to the deployed
+  URL to arm it; without that variable the job exits quietly. One service running
+  continuously uses roughly 730 of the 750 free instance-hours in a month.
+- **A free Postgres instance expires 30 days after it is created**, with a 14-day grace
+  period before deletion. A longer-lived demo needs a paid database.
 
 ---
 
@@ -500,8 +524,9 @@ demand factor (see below) rather than by changing the definition.
   filter is the natural thing to push into Postgres as a `jsonb` containment query with a
   GIN index, scoring only what survives.
 - **Pagination** with cursors, rather than only `limit`.
-- **Database migrations** via a proper tool rather than a single `init.sql` applied on
-  first boot.
+- **Database migrations** via a proper tool. The schema is currently applied by the app at
+  startup from one idempotent script, which bootstraps a fresh database but cannot evolve
+  an existing one. The first change to a populated table needs versioned migrations.
 - **Structured logging and request IDs**, plus rate limiting and CORS for a real deployment.
 - **A Postgres-backed integration test** in CI using Testcontainers, so the Postgres
   repository is covered automatically rather than by the manual verification I did.
