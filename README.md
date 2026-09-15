@@ -13,6 +13,7 @@ read in one file: [`src/scoring/scorer.ts`](src/scoring/scorer.ts).
 - [Quick start](#quick-start)
 - [Running with Docker](#running-with-docker)
 - [API reference](#api-reference)
+- [The API contract (OpenAPI)](#the-api-contract-openapi)
 - [**The scoring formula and why these weights**](#the-scoring-formula-and-why-these-weights) ← the important part
 - [Architecture](#architecture)
 - [Tests](#tests)
@@ -37,6 +38,8 @@ In a second terminal, load some sample data and try it:
 npm run seed         # creates 3 candidates and 5 jobs, prints their ids
 curl -s "http://localhost:3000/candidates/<candidate-id>/recommendations?limit=3" | jq
 ```
+
+Prefer clicking to curling? Open <http://localhost:3000/docs> for interactive API docs.
 
 Other scripts:
 
@@ -175,6 +178,29 @@ same breakdown shape, with `candidateId` and `name` in place of `jobId` and `tit
 
 Errors are always JSON: `400` for validation failures with a per-field `details` array,
 `404` for unknown ids and routes, `500` for anything unexpected.
+
+---
+
+## The API contract (OpenAPI)
+
+With the server running:
+
+| URL | What it is |
+|---|---|
+| <http://localhost:3000/docs> | Interactive Swagger UI — browse every endpoint and run real requests from the browser |
+| <http://localhost:3000/openapi.json> | The raw OpenAPI 3.1 document, for importing into Postman, Insomnia or a client generator |
+
+**The document is generated from the same Zod schemas that validate real requests**, in
+[`src/docs/openapi.ts`](src/docs/openapi.ts). It is not hand-written, so it cannot quietly
+drift out of step with the implementation — change a schema and the published contract
+changes with it.
+
+That guarantee is enforced rather than assumed. The tests in
+[`tests/contract.test.ts`](tests/contract.test.ts) issue real requests and assert that every
+response still satisfies the schema the contract publishes, including the error shapes.
+Dropping a single documented field from a response fails the suite.
+
+Swagger UI is bundled rather than loaded from a CDN, so the docs work offline.
 
 ---
 
@@ -337,7 +363,7 @@ Docker, 3 years minimum, Hyderabad but remote, ₹18L–24L):
 src/
 ├── domain/
 │   ├── types.ts          Candidate, Job, RequiredSkill — no framework types
-│   └── schemas.ts        Zod schemas; the only place untrusted input is parsed
+│   └── schemas.ts        Zod request + response schemas; the contract's single source of truth
 ├── scoring/
 │   ├── weights.ts        default weights + normalisation to 100
 │   ├── scorer.ts         eligibility gate + four pure dimension scorers
@@ -347,7 +373,9 @@ src/
 │   ├── memory.ts         in-memory implementation
 │   ├── postgres.ts       Postgres implementation
 │   └── index.ts          picks one based on DATABASE_URL
-├── routes/               thin Express handlers
+├── docs/
+│   └── openapi.ts        OpenAPI 3.1 document, generated from the Zod schemas
+├── routes/               thin Express handlers, plus /docs and /openapi.json
 ├── errors.ts             one error middleware: Zod → 400, HttpError → status, else 500
 ├── app.ts                wiring
 └── server.ts             process lifecycle
@@ -385,7 +413,7 @@ so normalising them would add joins and buy nothing.
 npm test
 ```
 
-59 tests across three files, weighted heavily towards the scoring logic, which is where
+70 tests across four files, weighted heavily towards the scoring logic, which is where
 the assignment says the value is.
 
 | File | Focus |
@@ -393,6 +421,7 @@ the assignment says the value is.
 | [`tests/scoring.test.ts`](tests/scoring.test.ts) | Each dimension in isolation, plus weight normalisation |
 | [`tests/recommend.test.ts`](tests/recommend.test.ts) | Filtering, ranking, limits, both directions |
 | [`tests/api.test.ts`](tests/api.test.ts) | The real Express app via Supertest, no mocks |
+| [`tests/contract.test.ts`](tests/contract.test.ts) | The OpenAPI document, and real responses checked against it |
 
 Edge cases covered explicitly, including the two the brief calls out:
 
@@ -476,7 +505,6 @@ demand factor (see below) rather than by changing the definition.
 - **Structured logging and request IDs**, plus rate limiting and CORS for a real deployment.
 - **A Postgres-backed integration test** in CI using Testcontainers, so the Postgres
   repository is covered automatically rather than by the manual verification I did.
-- **OpenAPI spec** generated from the Zod schemas, since they already describe every shape.
 
 ---
 
